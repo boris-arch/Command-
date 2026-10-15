@@ -1,0 +1,6 @@
+{
+  "name": "Tactical Medieval Skirmish",
+  "description": "Fast-paced, real-time tactical line-drawing strategy game. Command shields, highland archers, and cavalry charges against barbarian horde waves.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
