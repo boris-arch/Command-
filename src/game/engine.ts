@@ -401,12 +401,19 @@ export class GameEngine {
       soundEngine.playClick();
       this.setBanner('🐎 Knight Cavalry galloping along drawn flanking route!');
       squadUnits.forEach((u, idx) => {
-        // Stagger slightly along the route
-        u.pathWaypoints = [...stroke];
+        // Stagger waypoints along stroke so they follow in an authentic tactical column rather than stacking at point 0
+        const stepOffset = Math.min(idx * 3, Math.max(0, stroke.length - 2));
+        u.pathWaypoints = stroke.slice(stepOffset);
+        if (u.pathWaypoints.length < 2) {
+          u.pathWaypoints = [...stroke];
+        }
         u.currentWaypointIdx = 0;
         u.momentum = 1.0;
-        u.targetX = stroke[0].x;
-        u.targetY = stroke[0].y;
+        // Lateral echelon offset so horses form a clean formation
+        const lateralSign = (idx % 2 === 0 ? 1 : -1);
+        const lateralMag = Math.floor((idx + 1) / 2) * 10;
+        u.targetX = u.pathWaypoints[0].x + (lateralSign * lateralMag * 0.5);
+        u.targetY = u.pathWaypoints[0].y + (lateralSign * lateralMag * 0.7);
       });
     } else {
       // Shield or Archer: Distribute soldiers evenly along the drawn line
@@ -815,6 +822,9 @@ export class GameEngine {
       // Separation from trees and cliff face
       this.resolveTerrainCollisions(u);
     }
+
+    // Dynamic soft-body separation between units so troops never stack
+    this.resolveUnitSeparation(dt);
   }
 
   private updateAlliedUnit(u: Unit, dt: number) {
@@ -1396,6 +1406,78 @@ export class GameEngine {
     // 3. Screen bounds clamping
     u.x = Math.max(u.radius + 10, Math.min(1190 - u.radius, u.x));
     u.y = Math.max(u.radius + 10, Math.min(680 - u.radius, u.y));
+  }
+
+  /**
+   * Dynamic soft-body collision separation between units.
+   * Ensures troops never stack on a single point, maintaining formation clarity.
+   */
+  private resolveUnitSeparation(dt: number) {
+    const aliveUnits = this.units.filter((u) => !u.isDying);
+    const n = aliveUnits.length;
+    if (n < 2) return;
+
+    const getUnitWeight = (type: string) => {
+      switch (type) {
+        case 'brute': return 3.5;
+        case 'cavalry': return 2.4;
+        case 'shield': return 1.6;
+        case 'spearman': return 1.2;
+        case 'swordsman': return 1.0;
+        case 'archer': return 0.8;
+        default: return 1.0;
+      }
+    };
+
+    // 2 relaxation passes for smooth and responsive anti-stacking
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < n; i++) {
+        const u1 = aliveUnits[i];
+        const w1 = getUnitWeight(u1.type);
+
+        for (let j = i + 1; j < n; j++) {
+          const u2 = aliveUnits[j];
+          const w2 = getUnitWeight(u2.type);
+
+          let dx = u2.x - u1.x;
+          let dy = u2.y - u1.y;
+          let dist = Math.hypot(dx, dy);
+
+          // Extra spacing between friendly units so blue troops maintain clear staggered ranks
+          const extraPadding = (u1.isPlayer && u2.isPlayer) ? 7 : (u1.isPlayer !== u2.isPlayer ? 2 : 4);
+          const minDist = u1.radius + u2.radius + extraPadding;
+
+          if (dist < minDist) {
+            let nx = 0;
+            let ny = 0;
+
+            if (dist < 0.001) {
+              const angle = ((i * 137.5 + j * 47) % 360) * (Math.PI / 180);
+              nx = Math.cos(angle);
+              ny = Math.sin(angle);
+              dist = 0.001;
+            } else {
+              nx = dx / dist;
+              ny = dy / dist;
+            }
+
+            const overlap = minDist - dist;
+            const totalWeight = w1 + w2;
+            const ratio1 = w2 / totalWeight;
+            const ratio2 = w1 / totalWeight;
+
+            // Soft-body separation displacement
+            const pushDist = overlap * 0.55;
+            u1.x -= nx * pushDist * ratio1;
+            u1.y -= ny * pushDist * ratio1;
+            u2.x += nx * pushDist * ratio2;
+            u2.y += ny * pushDist * ratio2;
+          }
+        }
+
+        this.resolveTerrainCollisions(u1);
+      }
+    }
   }
 
   private updateTugOfWar() {

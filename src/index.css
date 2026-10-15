@@ -1,1 +1,8 @@
 @import "tailwindcss";
+
+.crisp-canvas {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}

@@ -19,6 +19,100 @@ import {
 import { SquadType, SquadData, GameStateStats, ShieldStance } from '../game/types.ts';
 import { getVeterancyPerks } from '../game/rules.ts';
 
+// Custom sharp medieval vector SVG icons for bottom command dock
+const ShieldCardIcon = () => (
+  <svg viewBox="0 0 32 32" className="w-7 h-7 sm:w-8 sm:h-8 mb-1 filter drop-shadow" fill="none" aria-hidden="true">
+    <path
+      d="M16 2.5 L27 6.5 C27 16 23 24.5 16 29.5 C9 24.5 5 16 5 6.5 Z"
+      fill="url(#shieldCardGrad)"
+      stroke="#facc15"
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M16 4.5 L24.5 7.8 C24.5 15.2 21.5 22.2 16 26.5 C10.5 22.2 7.5 15.2 7.5 7.8 Z"
+      fill="#1d4ed8"
+      stroke="#3b82f6"
+      strokeWidth="1"
+    />
+    <path d="M14 8 H18 V23 H14 Z" fill="#ffffff" />
+    <path d="M10 11.5 H22 V15.5 H10 Z" fill="#ffffff" />
+    <circle cx="16" cy="13.5" r="2.2" fill="#fde047" stroke="#ca8a04" strokeWidth="0.8" />
+    <defs>
+      <linearGradient id="shieldCardGrad" x1="5" y1="2.5" x2="27" y2="29.5" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#2563eb" />
+        <stop offset="1" stopColor="#1e3a8a" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
+const ArcherCardIcon = () => (
+  <svg viewBox="0 0 32 32" className="w-7 h-7 sm:w-8 sm:h-8 mb-1 filter drop-shadow" fill="none" aria-hidden="true">
+    <path
+      d="M8 4 C15 7 21 12 21 16 C21 20 15 25 8 28 C9.5 25 11 21 11 16 C11 11 9.5 7 8 4 Z"
+      fill="#b45309"
+      stroke="#78350f"
+      strokeWidth="1.2"
+    />
+    <path d="M8 4 L6.5 2.5 M8 28 L6.5 29.5" stroke="#facc15" strokeWidth="2" strokeLinecap="round" />
+    <path d="M6.5 2.5 L14 16 L6.5 29.5" stroke="#f8fafc" strokeWidth="1.2" strokeLinecap="round" />
+    <path d="M14 16 L29 16" stroke="#d97706" strokeWidth="2" strokeLinecap="round" />
+    <path d="M29 16 L24 13 L25.5 16 L24 19 Z" fill="#f1f5f9" stroke="#94a3b8" strokeWidth="0.8" />
+    <path d="M14 16 L10 13 M14 16 L10 19 M12 16 L8 13.5 M12 16 L8 18.5" stroke="#38bdf8" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const CavalryCardIcon = () => (
+  <svg viewBox="0 0 32 32" className="w-7 h-7 sm:w-8 sm:h-8 mb-1 filter drop-shadow" fill="none" aria-hidden="true">
+    <path
+      d="M6 28 C7 21 9 14 15 9 C17 6 20 4 23 4 C24 4 25 5 25 6 C25 8 23 9 22 11 L27 12 C28.5 12.5 29 14 28 15.5 L24.5 19 C23 20.5 21 21 19 21.5 L16.5 28 Z"
+      fill="#451a03"
+      stroke="#78350f"
+      strokeWidth="1.2"
+    />
+    <path
+      d="M17 9 L22 6 L26 12 L22 15 Z"
+      fill="#94a3b8"
+      stroke="#e2e8f0"
+      strokeWidth="1"
+    />
+    <path d="M20 5 L21 2 L22 5" stroke="#facc15" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <circle cx="21" cy="10.5" r="1.3" fill="#0f172a" />
+    <path d="M22 15 L26 13 M18 13 L22 15 L14 23" stroke="#38bdf8" strokeWidth="1.8" strokeLinecap="round" />
+    <circle cx="22" cy="15" r="1.8" fill="#facc15" stroke="#ca8a04" strokeWidth="0.8" />
+  </svg>
+);
+
+const RallyHornCardIcon = () => (
+  <svg viewBox="0 0 32 32" className="w-7 h-7 sm:w-8 sm:h-8 mb-1 filter drop-shadow" fill="none" aria-hidden="true">
+    <path
+      d="M5 24 C8 24 12 21 16 16 C20 11 23 7 28 6 C29 7.5 29 10 27 12 C22 16 17 21 11 25 C8 27 5.5 26.5 5 24 Z"
+      fill="url(#hornCardGrad)"
+      stroke="#b45309"
+      strokeWidth="1.2"
+    />
+    <ellipse cx="27.5" cy="9" rx="2" ry="4" transform="rotate(-30 27.5 9)" fill="#ca8a04" stroke="#facc15" strokeWidth="1" />
+    <rect x="3.5" y="23" width="2.5" height="3" rx="1" fill="#fef08a" stroke="#ca8a04" strokeWidth="0.8" />
+    <path d="M13 18.5 L15 16 M18 13.5 L20 11" stroke="#facc15" strokeWidth="1.8" strokeLinecap="round" />
+    <path
+      d="M13 20 L13 28 L17 25.5 L21 28 L21 14.5"
+      fill="#ef4444"
+      stroke="#b91c1c"
+      strokeWidth="1"
+      strokeLinejoin="round"
+    />
+    <circle cx="17" cy="22" r="1.5" fill="#facc15" />
+    <defs>
+      <linearGradient id="hornCardGrad" x1="5" y1="24" x2="28" y2="6" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#fef08a" />
+        <stop offset="0.5" stopColor="#facc15" />
+        <stop offset="1" stopColor="#d97706" />
+      </linearGradient>
+    </defs>
+  </svg>
+);
+
 interface HUDProps {
   stats: GameStateStats;
   squads: Record<SquadType, SquadData>;
@@ -165,7 +259,7 @@ export const HUD: React.FC<HUDProps> = ({
               : 'bg-gradient-to-b from-blue-600 to-blue-800 border-blue-400'
           }`}
         >
-          <span className="text-2xl sm:text-3xl mb-1 filter drop-shadow">🛡️</span>
+          <ShieldCardIcon />
           <span className="text-white font-black text-xs sm:text-sm font-sans drop-shadow">
             Shields
           </span>
@@ -188,7 +282,7 @@ export const HUD: React.FC<HUDProps> = ({
               : 'bg-gradient-to-b from-indigo-600 to-purple-800 border-indigo-400'
           }`}
         >
-          <span className="text-2xl sm:text-3xl mb-1 filter drop-shadow">🏹</span>
+          <ArcherCardIcon />
           <span className="text-white font-black text-xs sm:text-sm font-sans drop-shadow">
             Archers
           </span>
@@ -217,7 +311,7 @@ export const HUD: React.FC<HUDProps> = ({
               : 'bg-gradient-to-b from-sky-500 to-blue-700 border-sky-300'
           }`}
         >
-          <span className="text-2xl sm:text-3xl mb-1 filter drop-shadow">🐎</span>
+          <CavalryCardIcon />
           <span className="text-white font-black text-xs sm:text-sm font-sans drop-shadow">
             Cavalry
           </span>
@@ -238,7 +332,7 @@ export const HUD: React.FC<HUDProps> = ({
               : 'bg-stone-300 border-stone-400 opacity-60 cursor-not-allowed text-stone-600'
           }`}
         >
-          <span className="text-2xl sm:text-3xl mb-1 filter drop-shadow">🎺</span>
+          <RallyHornCardIcon />
           <span className="text-white font-black text-xs sm:text-sm font-sans drop-shadow">
             Morale
           </span>

@@ -101,7 +101,57 @@ export default function App() {
     }
   }, [gameState]);
 
-  // 2. Setup Canvas & 60 FPS Render Loop
+  // 2. High-DPI Resolution & Resize Management (Dynamic DPR Buffer matching Viewport)
+  const updateCanvasResolution = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    // Device Pixel Ratio (e.g. 2 for Retina, 1.5, 3)
+    const dpr = Math.max(window.devicePixelRatio || 1, 1);
+    const physicalWidth = Math.round(rect.width * dpr);
+    const physicalHeight = Math.round(rect.height * dpr);
+
+    if (canvas.width !== physicalWidth || canvas.height !== physicalHeight) {
+      canvas.width = physicalWidth;
+      canvas.height = physicalHeight;
+    }
+
+    const scaleX = physicalWidth / 1200;
+    const scaleY = physicalHeight / 700;
+
+    if (!rendererRef.current) {
+      rendererRef.current = new GameRenderer(ctx, physicalWidth, physicalHeight, scaleX, scaleY);
+    } else {
+      rendererRef.current.resize(physicalWidth, physicalHeight, scaleX, scaleY);
+    }
+  }, []);
+
+  // ResizeObserver + window resize listener to keep buffer matching physical display pixels at all times
+  useEffect(() => {
+    updateCanvasResolution();
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ro = new ResizeObserver(() => {
+      updateCanvasResolution();
+    });
+    ro.observe(canvas);
+
+    window.addEventListener('resize', updateCanvasResolution);
+
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateCanvasResolution);
+    };
+  }, [updateCanvasResolution]);
+
+  // 3. Setup 60 FPS Render Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -109,12 +159,9 @@ export default function App() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Fixed world buffer coordinates (1200 x 700)
-    canvas.width = 1200;
-    canvas.height = 700;
-
-    const renderer = new GameRenderer(ctx, 1200, 700);
-    rendererRef.current = renderer;
+    if (!rendererRef.current) {
+      updateCanvasResolution();
+    }
 
     let lastTime = performance.now();
     let animFrameId: number;
@@ -130,9 +177,9 @@ export default function App() {
         engine.update(dt * gameSpeed);
       }
 
-      // Render 60 FPS Canvas
-      if (engine && renderer) {
-        renderer.render(
+      // Render 60 FPS Canvas with High-DPI buffer
+      if (engine && rendererRef.current) {
+        rendererRef.current.render(
           engine.units,
           engine.projectiles,
           engine.particles,
@@ -162,18 +209,19 @@ export default function App() {
     return () => {
       cancelAnimationFrame(animFrameId);
     };
-  }, [gameState, gameSpeed, selectedSquad]);
+  }, [gameState, gameSpeed, selectedSquad, updateCanvasResolution]);
 
-  // 3. Pointer & Line Drawing Handlers
+  // 4. Pointer & Line Drawing Handlers with dynamic viewport scaling
   const screenToWorld = useCallback((clientX: number, clientY: number): Point => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
     const scaleX = 1200 / rect.width;
     const scaleY = 700 / rect.height;
     return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY,
+      x: Math.max(0, Math.min(1200, (clientX - rect.left) * scaleX)),
+      y: Math.max(0, Math.min(700, (clientY - rect.top) * scaleY)),
     };
   }, []);
 
@@ -285,87 +333,95 @@ export default function App() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-gradient-to-b from-sky-200 via-amber-50 to-emerald-100 flex items-center justify-center font-sans">
-      {/* 1. Canvas Viewport (1200x700 aspect ratio) */}
-      <div className="relative w-full h-full max-w-[1440px] max-h-[840px] flex items-center justify-center p-2">
-        <canvas
-          ref={canvasRef}
-          data-testid="game-canvas"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          className="w-full h-full object-contain rounded-2xl shadow-2xl border-4 border-amber-400/90 ring-4 ring-amber-300/40 touch-none cursor-crosshair"
-        />
-
-        {/* 2. Tactical HUD (Active while playing or paused) */}
-        {gameState !== 'title' && (
-          <HUD
-            stats={hudStats}
-            squads={squadsState}
-            selectedSquad={selectedSquad}
-            onSelectSquad={setSelectedSquad}
-            onToggleStance={() => engineRef.current?.toggleShieldStance()}
-            onTriggerVolley={() => engineRef.current?.triggerTargetedVolley()}
-            onTriggerRallyHorn={() => engineRef.current?.triggerRallyHorn()}
-            rallyHornTimer={rallyHornTimer}
-            rallyHornCooldown={engineRef.current?.rallyHornCooldown ?? 12}
-            actionBanner={actionBanner}
-            isPaused={gameState === 'paused'}
-            onTogglePause={handleTogglePause}
-            isMuted={isMuted}
-            onToggleMute={handleToggleMute}
-            gameSpeed={gameSpeed}
-            onToggleSpeed={handleToggleSpeed}
-            onOpenGuide={() => setShowGuide(true)}
-            onRestart={handleRestart}
+      {/* 1. Canvas Viewport (1200x700 aspect ratio strictly preserved) */}
+      <div className="relative w-full h-full max-w-[1440px] max-h-[840px] flex items-center justify-center p-2 sm:p-4">
+        <div
+          className="relative w-full max-h-full max-w-full flex items-center justify-center"
+          style={{
+            aspectRatio: '1200 / 700',
+            width: 'min(100%, calc((100vh - 2rem) * 1200 / 700))',
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            data-testid="game-canvas"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            className="w-full h-full block rounded-2xl shadow-2xl border-4 border-amber-400/90 ring-4 ring-amber-300/40 touch-none cursor-crosshair crisp-canvas"
           />
-        )}
 
-        {/* 3. Title Screen Overlay */}
-        {gameState === 'title' && (
-          <TitleScreen
-            onStart={handleStartGame}
-            onOpenGuide={() => setShowGuide(true)}
-          />
-        )}
+          {/* 2. Tactical HUD (Active while playing or paused) */}
+          {gameState !== 'title' && (
+            <HUD
+              stats={hudStats}
+              squads={squadsState}
+              selectedSquad={selectedSquad}
+              onSelectSquad={setSelectedSquad}
+              onToggleStance={() => engineRef.current?.toggleShieldStance()}
+              onTriggerVolley={() => engineRef.current?.triggerTargetedVolley()}
+              onTriggerRallyHorn={() => engineRef.current?.triggerRallyHorn()}
+              rallyHornTimer={rallyHornTimer}
+              rallyHornCooldown={engineRef.current?.rallyHornCooldown ?? 12}
+              actionBanner={actionBanner}
+              isPaused={gameState === 'paused'}
+              onTogglePause={handleTogglePause}
+              isMuted={isMuted}
+              onToggleMute={handleToggleMute}
+              gameSpeed={gameSpeed}
+              onToggleSpeed={handleToggleSpeed}
+              onOpenGuide={() => setShowGuide(true)}
+              onRestart={handleRestart}
+            />
+          )}
 
-        {/* 4. Pause Modal */}
-        {gameState === 'paused' && (
-          <PauseModal
-            onResume={() => setGameState('playing')}
-            onRestart={handleRestart}
-            onTitle={() => setGameState('title')}
-          />
-        )}
+          {/* 3. Title Screen Overlay */}
+          {gameState === 'title' && (
+            <TitleScreen
+              onStart={handleStartGame}
+              onOpenGuide={() => setShowGuide(true)}
+            />
+          )}
 
-        {/* 5. Victory Modal */}
-        {gameState === 'victory' && (
-          <VictoryModal
-            stats={hudStats}
-            onRestart={handleRestart}
-          />
-        )}
+          {/* 4. Pause Modal */}
+          {gameState === 'paused' && (
+            <PauseModal
+              onResume={() => setGameState('playing')}
+              onRestart={handleRestart}
+              onTitle={() => setGameState('title')}
+            />
+          )}
 
-        {/* 6. Game Over Modal */}
-        {gameState === 'gameover' && (
-          <GameOverModal
-            stats={hudStats}
-            onRestart={handleRestart}
-          />
-        )}
+          {/* 5. Victory Modal */}
+          {gameState === 'victory' && (
+            <VictoryModal
+              stats={hudStats}
+              onRestart={handleRestart}
+            />
+          )}
 
-        {/* 7. Between-Wave Tactical Reinforcements Modal */}
-        {gameState === 'reinforcement' && (
-          <ReinforcementModal
-            waveCleared={waveClearedNumber}
-            onSelectPerk={handleSelectPerk}
-          />
-        )}
+          {/* 6. Game Over Modal */}
+          {gameState === 'gameover' && (
+            <GameOverModal
+              stats={hudStats}
+              onRestart={handleRestart}
+            />
+          )}
 
-        {/* 8. Tactical Guide Field Manual */}
-        {showGuide && (
-          <TacticalGuideModal onClose={() => setShowGuide(false)} />
-        )}
+          {/* 7. Between-Wave Tactical Reinforcements Modal */}
+          {gameState === 'reinforcement' && (
+            <ReinforcementModal
+              waveCleared={waveClearedNumber}
+              onSelectPerk={handleSelectPerk}
+            />
+          )}
+
+          {/* 8. Tactical Guide Field Manual */}
+          {showGuide && (
+            <TacticalGuideModal onClose={() => setShowGuide(false)} />
+          )}
+        </div>
       </div>
     </div>
   );

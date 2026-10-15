@@ -21,18 +21,41 @@ import {
 
 export class GameRenderer {
   private ctx: CanvasRenderingContext2D;
-  private width: number;
-  private height: number;
+  private bufferWidth: number;
+  private bufferHeight: number;
+  public readonly worldWidth: number = 1200;
+  public readonly worldHeight: number = 700;
+  private scaleX: number = 1;
+  private scaleY: number = 1;
 
-  constructor(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  constructor(
+    ctx: CanvasRenderingContext2D,
+    bufferWidth: number = 1200,
+    bufferHeight: number = 700,
+    scaleX: number = 1,
+    scaleY: number = 1
+  ) {
     this.ctx = ctx;
-    this.width = width;
-    this.height = height;
+    this.bufferWidth = bufferWidth;
+    this.bufferHeight = bufferHeight;
+    this.scaleX = scaleX;
+    this.scaleY = scaleY;
+    this.disableSmoothing();
   }
 
-  public resize(width: number, height: number) {
-    this.width = width;
-    this.height = height;
+  private disableSmoothing() {
+    this.ctx.imageSmoothingEnabled = false;
+    if ('webkitImageSmoothingEnabled' in this.ctx) {
+      (this.ctx as unknown as { webkitImageSmoothingEnabled: boolean }).webkitImageSmoothingEnabled = false;
+    }
+  }
+
+  public resize(bufferWidth: number, bufferHeight: number, scaleX: number = 1, scaleY: number = 1) {
+    this.bufferWidth = bufferWidth;
+    this.bufferHeight = bufferHeight;
+    this.scaleX = scaleX;
+    this.scaleY = scaleY;
+    this.disableSmoothing();
   }
 
   public render(
@@ -46,7 +69,14 @@ export class GameRenderer {
     gameTime: number
   ) {
     const ctx = this.ctx;
-    ctx.clearRect(0, 0, this.width, this.height);
+    ctx.save();
+    // 1. Clear physical canvas buffer
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this.bufferWidth, this.bufferHeight);
+
+    // 2. High-DPI crisp integer scaling to native display resolution
+    ctx.setTransform(this.scaleX, 0, 0, this.scaleY, 0, 0);
+    this.disableSmoothing();
 
     // 1. Draw Battlefield Topography
     this.drawTerrain(gameTime);
@@ -100,6 +130,7 @@ export class GameRenderer {
     for (const ft of floatingTexts) {
       this.drawFloatingText(ft);
     }
+    ctx.restore();
   }
 
   // ================= TOPOGRAPHY RENDERING ================= //
@@ -108,11 +139,11 @@ export class GameRenderer {
     const ctx = this.ctx;
 
     // A. Base Grassy Green (Bright, lush, sunny vibrant cartoon meadow)
-    const grassGrad = ctx.createLinearGradient(0, 0, 0, this.height);
+    const grassGrad = ctx.createLinearGradient(0, 0, 0, this.worldHeight);
     grassGrad.addColorStop(0, '#7ecc4a');
     grassGrad.addColorStop(1, '#6bb83b');
     ctx.fillStyle = grassGrad;
-    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.fillRect(0, 0, this.worldWidth, this.worldHeight);
 
     // Sunny dappled meadow patches
     ctx.fillStyle = 'rgba(163, 230, 53, 0.25)';
@@ -177,72 +208,125 @@ export class GameRenderer {
     }
 
     // B. Warm Sunny Curved Dirt Road & Defile Chokepoint
+    // Natural curve running smoothly from bottom-left corner (0, 545 to 0, 695) across defile to eastern edge
     ctx.save();
-    const roadGrad = ctx.createLinearGradient(310, 350, this.width, 450);
-    roadGrad.addColorStop(0, '#fae6be');
-    roadGrad.addColorStop(0.5, '#f5deb3');
-    roadGrad.addColorStop(1, '#ebd19f');
+    
+    // Soft ambient ground shadow at the road edges
+    ctx.fillStyle = 'rgba(40, 60, 20, 0.22)';
+    ctx.beginPath();
+    ctx.moveTo(0, 535);
+    ctx.bezierCurveTo(140, 510, 270, 360, 440, 315);
+    ctx.bezierCurveTo(680, 245, 920, 205, this.worldWidth, 185);
+    ctx.lineTo(this.worldWidth, 685);
+    ctx.bezierCurveTo(920, 695, 650, 635, 420, 555);
+    ctx.bezierCurveTo(270, 595, 130, 665, 0, 705);
+    ctx.closePath();
+    ctx.fill();
+
+    // Main Dirt Road Surface (Layered warm soil gradations)
+    const roadGrad = ctx.createLinearGradient(0, 600, this.worldWidth, 350);
+    roadGrad.addColorStop(0, '#ebd09f');
+    roadGrad.addColorStop(0.35, '#f5deb3');
+    roadGrad.addColorStop(0.7, '#ebd19f');
+    roadGrad.addColorStop(1, '#dfbc85');
     ctx.fillStyle = roadGrad;
-    ctx.strokeStyle = '#cda972';
+    ctx.strokeStyle = '#c8a36c';
     ctx.lineWidth = 3;
 
     ctx.beginPath();
-    ctx.moveTo(310, 340);
-    ctx.bezierCurveTo(480, 310, 750, 230, this.width, 210);
-    ctx.lineTo(this.width, 670);
-    ctx.bezierCurveTo(750, 680, 480, 620, 310, 520);
+    ctx.moveTo(0, 545);
+    ctx.bezierCurveTo(140, 520, 270, 370, 440, 325);
+    ctx.bezierCurveTo(680, 255, 920, 215, this.worldWidth, 195);
+    ctx.lineTo(this.worldWidth, 675);
+    ctx.bezierCurveTo(920, 685, 650, 625, 420, 545);
+    ctx.bezierCurveTo(270, 585, 130, 655, 0, 695);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Warm soft cart track ruts
-    ctx.strokeStyle = '#dec292';
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([18, 14]);
-    ctx.beginPath();
-    ctx.moveTo(330, 390);
-    ctx.bezierCurveTo(550, 360, 850, 300, this.width, 290);
-    ctx.moveTo(330, 470);
-    ctx.bezierCurveTo(550, 500, 850, 520, this.width, 530);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // Subtle uneven dirt patches & soil variations (No dashed highway lines!)
+    const soilPatches = [
+      { x: 120, y: 610, rx: 65, ry: 28, rot: -0.3, col: 'rgba(195, 150, 95, 0.28)' },
+      { x: 260, y: 530, rx: 75, ry: 35, rot: -0.4, col: 'rgba(215, 175, 120, 0.35)' },
+      { x: 380, y: 440, rx: 90, ry: 40, rot: -0.2, col: 'rgba(185, 140, 85, 0.25)' },
+      { x: 540, y: 390, rx: 110, ry: 50, rot: -0.15, col: 'rgba(215, 175, 120, 0.3)' },
+      { x: 740, y: 370, rx: 120, ry: 55, rot: -0.05, col: 'rgba(195, 150, 95, 0.25)' },
+      { x: 960, y: 360, rx: 130, ry: 60, rot: 0.05, col: 'rgba(225, 185, 130, 0.3)' },
+      { x: 1120, y: 380, rx: 90, ry: 45, rot: 0.08, col: 'rgba(185, 140, 85, 0.25)' },
+    ];
+    for (const sp of soilPatches) {
+      ctx.fillStyle = sp.col;
+      ctx.beginPath();
+      ctx.ellipse(sp.x, sp.y, sp.rx, sp.ry, sp.rot, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-    // Small smooth river pebbles along the road
-    ctx.fillStyle = '#bfa27a';
+    // Natural curved wagon ruts (organic continuous grooves pressed into clay)
+    ctx.strokeStyle = 'rgba(180, 135, 80, 0.45)';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 580);
+    ctx.bezierCurveTo(140, 555, 280, 420, 440, 385);
+    ctx.bezierCurveTo(680, 315, 920, 275, this.worldWidth, 260);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(0, 650);
+    ctx.bezierCurveTo(140, 620, 270, 490, 440, 475);
+    ctx.bezierCurveTo(680, 435, 920, 420, this.worldWidth, 425);
+    ctx.stroke();
+
+    // Natural river pebbles & gravel clusters with 3D drop shadow & highlight
     const pebbles = [
-      { x: 380, y: 370, r: 2.5 }, { x: 460, y: 440, r: 3 },
-      { x: 590, y: 390, r: 2 }, { x: 670, y: 510, r: 3 },
-      { x: 780, y: 340, r: 2.5 }, { x: 890, y: 460, r: 3.5 },
-      { x: 960, y: 320, r: 2 }, { x: 1040, y: 480, r: 3 }
+      { x: 90, y: 625, r: 3, c: '#b39268' }, { x: 170, y: 585, r: 2.2, c: '#9c7b52' },
+      { x: 230, y: 540, r: 3.5, c: '#c9a87c' }, { x: 310, y: 470, r: 2.8, c: '#a8855c' },
+      { x: 380, y: 395, r: 3.2, c: '#b8946a' }, { x: 440, y: 445, r: 2.5, c: '#997850' },
+      { x: 530, y: 410, r: 3.8, c: '#c4a275' }, { x: 610, y: 490, r: 3, c: '#a58359' },
+      { x: 690, y: 370, r: 2.6, c: '#b59267' }, { x: 770, y: 430, r: 3.6, c: '#c8a77d' },
+      { x: 860, y: 345, r: 2.8, c: '#9a7951' }, { x: 940, y: 465, r: 3.4, c: '#bda076' },
+      { x: 1030, y: 360, r: 2.4, c: '#ab885e' }, { x: 1110, y: 440, r: 3.2, c: '#c5a479' }
     ];
     for (const pb of pebbles) {
+      // Pebble shadow
+      ctx.fillStyle = 'rgba(50, 35, 15, 0.35)';
       ctx.beginPath();
-      ctx.ellipse(pb.x, pb.y, pb.r * 1.3, pb.r, 0.2, 0, Math.PI * 2);
+      ctx.ellipse(pb.x + 1.2, pb.y + 1.2, pb.r * 1.3, pb.r * 0.9, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      // Pebble stone body
+      ctx.fillStyle = pb.c;
+      ctx.beginPath();
+      ctx.ellipse(pb.x, pb.y, pb.r * 1.25, pb.r * 0.85, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      // Pebble sunlight highlight
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.beginPath();
+      ctx.arc(pb.x - pb.r * 0.3, pb.y - pb.r * 0.3, pb.r * 0.45, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
 
-    // C. High Cliff Plateau (Warm sunny sandstone bluff with vibrant grass top)
+    // C. High Cliff Plateau with Tiered 3D Isometric Rocks & Wooden Ramp Bridge
     ctx.save();
-    // Warm soft ground shadow under cliff
-    ctx.fillStyle = 'rgba(40, 65, 20, 0.22)';
+
+    // 1. Deep cast shadow beneath the entire cliff onto the road and defile
+    ctx.fillStyle = 'rgba(25, 40, 15, 0.38)';
     ctx.beginPath();
-    ctx.moveTo(0, 325);
-    ctx.bezierCurveTo(180, 335, 290, 340, 345, 295);
-    ctx.bezierCurveTo(420, 220, 430, 160, 365, 0);
-    ctx.lineTo(380, 0);
-    ctx.bezierCurveTo(450, 160, 440, 230, 360, 310);
-    ctx.bezierCurveTo(300, 355, 180, 350, 0, 345);
+    ctx.moveTo(0, 335);
+    ctx.bezierCurveTo(140, 345, 270, 350, 355, 305);
+    ctx.bezierCurveTo(430, 230, 440, 160, 375, 0);
+    ctx.lineTo(395, 0);
+    ctx.bezierCurveTo(465, 160, 455, 240, 370, 320);
+    ctx.bezierCurveTo(280, 370, 140, 365, 0, 355);
     ctx.closePath();
     ctx.fill();
 
-    // Cliff Face (Warm sunny terracotta clay / sandstone)
-    const cliffGrad = ctx.createLinearGradient(0, 210, 350, 330);
-    cliffGrad.addColorStop(0, '#d98b64');
-    cliffGrad.addColorStop(0.6, '#c47851');
-    cliffGrad.addColorStop(1, '#a85f38');
-    ctx.fillStyle = cliffGrad;
-    ctx.strokeStyle = '#5a311b';
+    // 2. Base Cliff Wall (Terracotta sandstone foundation)
+    const cliffBaseGrad = ctx.createLinearGradient(0, 200, 360, 340);
+    cliffBaseGrad.addColorStop(0, '#c7784f');
+    cliffBaseGrad.addColorStop(0.5, '#ab5e35');
+    cliffBaseGrad.addColorStop(1, '#7a3b1a');
+    ctx.fillStyle = cliffBaseGrad;
+    ctx.strokeStyle = '#4a210c';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(0, 210);
@@ -250,22 +334,158 @@ export class GameRenderer {
     ctx.bezierCurveTo(370, 120, 360, 50, 340, 0);
     ctx.lineTo(365, 0);
     ctx.bezierCurveTo(395, 80, 410, 160, 345, 280);
-    ctx.bezierCurveTo(310, 330, 160, 330, 0, 325);
+    ctx.bezierCurveTo(310, 335, 160, 335, 0, 330);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Cliff rock striations & highlights
-    ctx.strokeStyle = '#e8a885';
-    ctx.lineWidth = 2;
-    for (let cx = 80; cx < 330; cx += 45) {
+    // 3. Tiered 3D Isometric Rock Strata (Faceted rock blocks with deep undercuts & shadows)
+    const rockTiers = [
+      // Lower Tier boulders & ledges
+      { pts: [[0, 270], [80, 260], [120, 290], [150, 280], [210, 310], [180, 330], [90, 332], [0, 330]], shadow: '#542610', face: '#a45731', light: '#d98157' },
+      { pts: [[140, 275], [220, 260], [270, 290], [310, 280], [335, 305], [290, 328], [210, 325], [150, 280]], shadow: '#421d0a', face: '#944b26', light: '#c86f45' },
+      // Mid Tier stone shelf
+      { pts: [[0, 230], [95, 225], [145, 245], [220, 235], [260, 255], [230, 280], [130, 275], [0, 275]], shadow: '#592912', face: '#b8663d', light: '#e58e63' },
+      { pts: [[210, 225], [275, 210], [325, 225], [350, 250], [335, 280], [265, 270], [215, 240]], shadow: '#4a200c', face: '#a0542c', light: '#ce764b' },
+      // Upper Escarpment under plateau rim
+      { pts: [[310, 140], [345, 90], [355, 40], [340, 0], [360, 0], [375, 50], [370, 120], [335, 160]], shadow: '#421b08', face: '#8c4420', light: '#b85f34' }
+    ];
+
+    for (const rock of rockTiers) {
+      // Dark undercut shadow
+      ctx.fillStyle = rock.shadow;
       ctx.beginPath();
-      ctx.moveTo(cx, 225);
-      ctx.lineTo(cx + 12, 305);
+      ctx.moveTo(rock.pts[0][0], rock.pts[0][1]);
+      for (let i = 1; i < rock.pts.length; i++) {
+        ctx.lineTo(rock.pts[i][0], rock.pts[i][1]);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Main rock face
+      ctx.fillStyle = rock.face;
+      ctx.beginPath();
+      ctx.moveTo(rock.pts[0][0] + 2, rock.pts[0][1] - 3);
+      for (let i = 1; i < rock.pts.length - 1; i++) {
+        ctx.lineTo(rock.pts[i][0] + 1, rock.pts[i][1] - 4);
+      }
+      ctx.closePath();
+      ctx.fill();
+
+      // Sunlit top edge highlight
+      ctx.strokeStyle = rock.light;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(rock.pts[0][0], rock.pts[0][1] - 4);
+      for (let i = 1; i < Math.ceil(rock.pts.length / 2); i++) {
+        ctx.lineTo(rock.pts[i][0], rock.pts[i][1] - 4);
+      }
       ctx.stroke();
     }
 
-    // Top Plateau Surface (Bright sunny green lawn)
+    // Vertical crags and rock fracture fissures
+    ctx.strokeStyle = '#381607';
+    ctx.lineWidth = 2.2;
+    const fissures = [
+      [[70, 225], [65, 260], [75, 290], [70, 325]],
+      [[155, 235], [165, 270], [160, 315]],
+      [[245, 220], [240, 255], [250, 300]],
+      [[300, 185], [305, 230], [295, 275]],
+      [[335, 80], [340, 130], [325, 170]]
+    ];
+    for (const f of fissures) {
+      ctx.beginPath();
+      ctx.moveTo(f[0][0], f[0][1]);
+      for (let i = 1; i < f.length; i++) {
+        ctx.lineTo(f[i][0], f[i][1]);
+      }
+      ctx.stroke();
+    }
+
+    // 4. Wooden Ramp Bridge on the right side of the cliff (Connecting plateau to defile)
+    // Runs from around (325, 140) down to (375, 290)
+    // Ground shadow beneath ramp stilts
+    ctx.fillStyle = 'rgba(25, 35, 15, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(360, 305, 35, 14, 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Heavy vertical timber support stilts
+    const stilts = [
+      { x: 335, topY: 155, botY: 220 },
+      { x: 352, topY: 195, botY: 260 },
+      { x: 370, topY: 235, botY: 298 }
+    ];
+    for (const s of stilts) {
+      ctx.fillStyle = '#3a1b08';
+      ctx.fillRect(s.x - 4, s.topY, 8, s.botY - s.topY);
+      ctx.fillStyle = '#6b3614';
+      ctx.fillRect(s.x - 2, s.topY, 4, s.botY - s.topY);
+      ctx.strokeStyle = '#4a240c';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(s.x - 6, s.topY + 12);
+      ctx.lineTo(s.x + 6, s.botY - 6);
+      ctx.stroke();
+    }
+
+    // Heavy wooden inclined stringer beams
+    ctx.strokeStyle = '#4e250c';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(320, 145);
+    ctx.lineTo(375, 290);
+    ctx.moveTo(332, 140);
+    ctx.lineTo(387, 285);
+    ctx.stroke();
+
+    // Wooden plank treads (slanted stepped planks)
+    for (let step = 0; step <= 10; step++) {
+      const t = step / 10;
+      const px = 320 + t * 55;
+      const py = 145 + t * 145;
+      ctx.fillStyle = step % 2 === 0 ? '#85471d' : '#9c5523';
+      ctx.strokeStyle = '#381705';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(px - 10, py - 4);
+      ctx.lineTo(px + 12, py + 2);
+      ctx.lineTo(px + 10, py + 8);
+      ctx.lineTo(px - 12, py + 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#1e1006';
+      ctx.beginPath();
+      ctx.arc(px - 6, py - 1, 1, 0, Math.PI * 2);
+      ctx.arc(px + 6, py + 3, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Wooden Handrail with balusters
+    ctx.strokeStyle = '#633110';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(320, 125);
+    ctx.lineTo(375, 270);
+    ctx.stroke();
+
+    for (let p = 0; p <= 4; p++) {
+      const t = p / 4;
+      const hx = 320 + t * 55;
+      const hy = 145 + t * 145;
+      ctx.strokeStyle = '#4a220a';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(hx, hy);
+      ctx.lineTo(hx, hy - 20);
+      ctx.stroke();
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(hx - 2, hy - 18, 4, 3);
+    }
+
+    // 5. Top Plateau Surface (Bright sunny green lawn)
     const plateauGrass = ctx.createLinearGradient(0, 0, 300, 200);
     plateauGrass.addColorStop(0, '#86d84e');
     plateauGrass.addColorStop(1, '#72c840');
@@ -294,7 +514,6 @@ export class GameRenderer {
       const fp = fencePosts[i];
       ctx.fillRect(fp.x - 2.5, fp.y - 12, 5, 14);
       ctx.strokeRect(fp.x - 2.5, fp.y - 12, 5, 14);
-      // Rope between posts
       if (i > 0) {
         const prevP = fencePosts[i - 1];
         ctx.strokeStyle = '#d97706';
@@ -305,7 +524,7 @@ export class GameRenderer {
       }
     }
 
-    // Highland Archer Vantage Badge (Vivid royal blue & shiny gold)
+    // Highland Archer Vantage Badge
     ctx.fillStyle = '#0284c7';
     ctx.strokeStyle = '#facc15';
     ctx.lineWidth = 2;
@@ -372,8 +591,8 @@ export class GameRenderer {
     // F. Drifting Sunny Pollen / Leaves (Brings the scene alive!)
     ctx.save();
     for (let i = 0; i < 12; i++) {
-      const lx = ((gameTime * 35 + i * 110) % (this.width + 100)) - 50;
-      const ly = (100 + i * 48 + Math.sin(gameTime * 2 + i) * 25) % this.height;
+      const lx = ((gameTime * 35 + i * 110) % (this.worldWidth + 100)) - 50;
+      const ly = (100 + i * 48 + Math.sin(gameTime * 2 + i) * 25) % this.worldHeight;
       ctx.fillStyle = i % 2 === 0 ? 'rgba(250, 204, 21, 0.45)' : 'rgba(134, 239, 172, 0.45)';
       ctx.beginPath();
       ctx.ellipse(lx, ly, 3, 1.8, Math.sin(gameTime + i), 0, Math.PI * 2);
@@ -477,12 +696,12 @@ export class GameRenderer {
   private drawUnitShadow(u: Unit) {
     const ctx = this.ctx;
     ctx.save();
-    // Warm soft translucent shadow (never dark or dreary)
-    ctx.fillStyle = 'rgba(35, 60, 20, 0.24)';
+    // Dark crisp oval ground shadow planted firmly under feet
+    ctx.fillStyle = 'rgba(15, 25, 10, 0.38)';
     ctx.beginPath();
-    const radiusX = u.type === 'cavalry' ? u.radius * 1.5 : (u.type === 'brute' ? u.radius * 1.4 : u.radius * 1.15);
-    const radiusY = u.radius * 0.55;
-    ctx.ellipse(u.x, u.y + (u.type === 'cavalry' ? 7 : 4), radiusX, radiusY, 0, 0, Math.PI * 2);
+    const radiusX = u.type === 'cavalry' ? u.radius * 1.55 : (u.type === 'brute' ? u.radius * 1.45 : u.radius * 1.15);
+    const radiusY = u.radius * 0.5;
+    ctx.ellipse(u.x, u.y + (u.type === 'cavalry' ? 9 : 6), radiusX, radiusY, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -543,413 +762,714 @@ export class GameRenderer {
     ctx.restore();
   }
 
-  // 1. Blue Shield Phalanx (Vivid Royal Blue & Polished Steel)
+  // 1. Blue Shield Phalanx (Tabletop Miniature Knight with Plate Armor, Kite Shield & Sword)
   private drawShieldUnit(u: Unit, gameTime: number) {
     const ctx = this.ctx;
     const isBraced = u.isBraced;
+    const isFacingLeft = Math.cos(u.facing) < 0;
+    const flipX = isFacingLeft ? -1 : 1;
+    const attackProg = u.attackTimer > 0 ? (u.attackTimer / u.attackCooldown) : 0;
+    const swingAngle = attackProg > 0 ? Math.sin((1 - attackProg) * Math.PI) * 1.3 : 0;
+    const isMoving = u.targetX !== undefined && Math.hypot(u.targetX - u.x, (u.targetY ?? u.y) - u.y) > 4;
+    const walkStep = isMoving ? Math.sin(gameTime * 14 + u.x * 0.2) * 3 : 0;
 
-    // Body (Vibrant Royal Blue tunic)
-    ctx.fillStyle = '#2563eb';
+    ctx.save();
+    ctx.translate(u.x, u.y);
+    ctx.scale(flipX, 1);
+
+    // 1. Planted boots on ground
+    ctx.fillStyle = '#381a08';
+    ctx.fillRect(-6 - walkStep, 6, 4.5, 3);
+    ctx.fillRect(1 + walkStep, 7, 5, 3);
+
+    // 2. Armored Legs & Greaves
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(-5 - walkStep, 2, 3.5, 5);
+    ctx.fillRect(2 + walkStep, 3, 3.5, 5);
+
+    // 3. Torso / Royal Blue Tabard with Chainmail
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(-6, -6, 12, 9);
+    const tabardGrad = ctx.createLinearGradient(-5, -6, 5, 4);
+    tabardGrad.addColorStop(0, '#2563eb');
+    tabardGrad.addColorStop(1, '#1d4ed8');
+    ctx.fillStyle = tabardGrad;
+    ctx.strokeStyle = '#1e3a8a';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(u.x, u.y, u.radius, 0, Math.PI * 2);
+    ctx.roundRect(-5, -6, 10, 8, 2);
     ctx.fill();
-    ctx.strokeStyle = '#1d4ed8';
-    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Gleaming Silver Helmet with highlight
+    // Leather belt with golden buckle
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(-5.5, -1, 11, 2);
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(-1.5, -1.5, 3, 3);
+
+    // 4. Knight Helmet & Great Helm
     ctx.fillStyle = '#cbd5e1';
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.arc(u.x - 2, u.y - 2, u.radius * 0.6, 0, Math.PI * 2);
+    ctx.roundRect(-4.5, -14, 9, 8, 3);
     ctx.fill();
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Specular sunny glint on helm
+    // Visor eye slit
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-0.5, -11, 4.5, 1.8);
+
+    // Specular gleam
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(u.x - 4, u.y - 4, u.radius * 0.22, 0, Math.PI * 2);
+    ctx.arc(-2, -12, 1.2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Eye visor slit
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(u.x - 1, u.y - 3, 3, 2);
-
-    // Helmet Plume (Crimson feather)
+    // Plume on crest
     ctx.fillStyle = (u.veterancyTier ?? 1) >= 3 ? '#facc15' : '#ef4444';
     ctx.beginPath();
-    ctx.moveTo(u.x - 3, u.y - u.radius * 0.6);
-    ctx.quadraticCurveTo(u.x - 6, u.y - u.radius * 1.1, u.x - 2, u.y - u.radius * 1.3);
-    ctx.quadraticCurveTo(u.x, u.y - u.radius * 0.9, u.x - 1, u.y - u.radius * 0.6);
+    ctx.moveTo(-2, -14);
+    ctx.quadraticCurveTo(-6, -18, -3, -21);
+    ctx.quadraticCurveTo(0, -17, 0, -14);
+    ctx.closePath();
     ctx.fill();
 
-    // Large Kite Shield (Vivid Royal Blue with Golden Trim & Alliance Cross)
+    // 5. Weapon Arm: Steel Arming Sword with Attack Arc
     ctx.save();
-    ctx.translate(u.x + (isBraced ? 7 : 4), u.y);
-    const shieldGrad = ctx.createLinearGradient(0, -u.radius * 1.1, 0, u.radius * 1.3);
+    ctx.translate(-4, -4);
+    ctx.rotate(0.3 + swingAngle);
+
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(-1.5, -1, 3, 2);
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(-0.5, 1, 1, 3);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(-3, -2, 6, 1.5);
+    ctx.fillStyle = '#f8fafc';
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(-1.2, -2);
+    ctx.lineTo(0, -15);
+    ctx.lineTo(1.2, -2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Attack slash arc motion trail
+    if (attackProg > 0.1 && attackProg < 0.85) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 16, -Math.PI * 0.7, -Math.PI * 0.1);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 6. Left Arm: Large Kite Shield
+    ctx.save();
+    ctx.translate(isBraced ? 6 : 4, -1);
+    const shieldGrad = ctx.createLinearGradient(0, -12, 0, 13);
     shieldGrad.addColorStop(0, '#3b82f6');
     shieldGrad.addColorStop(1, '#1d4ed8');
     ctx.fillStyle = shieldGrad;
     ctx.strokeStyle = isBraced ? '#facc15' : '#fbbf24';
-    ctx.lineWidth = isBraced ? 2.8 : 1.8;
+    ctx.lineWidth = isBraced ? 2.5 : 1.6;
 
     ctx.beginPath();
-    ctx.moveTo(0, -u.radius * 1.15);
-    ctx.lineTo(u.radius * 0.95, -u.radius * 0.85);
-    ctx.lineTo(u.radius * 0.75, u.radius * 1.1);
-    ctx.lineTo(0, u.radius * 1.35);
-    ctx.lineTo(-u.radius * 0.75, u.radius * 1.1);
-    ctx.lineTo(-u.radius * 0.95, -u.radius * 0.85);
+    ctx.moveTo(0, -11);
+    ctx.lineTo(7, -8);
+    ctx.lineTo(6, 8);
+    ctx.lineTo(0, 13);
+    ctx.lineTo(-4, 8);
+    ctx.lineTo(-5, -8);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Pure White Alliance Cross emblem
+    // White Heraldic Cross on Shield
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(-2, -u.radius * 0.7, 4, u.radius * 1.3);
-    ctx.fillRect(-u.radius * 0.55, -u.radius * 0.25, u.radius * 1.1, 4);
+    ctx.fillRect(-1, -7, 2.5, 13);
+    ctx.fillRect(-3.5, -3, 8, 2.5);
 
-    // Golden shield boss rivet
+    // Golden boss rivet
     ctx.fillStyle = '#fde047';
     ctx.beginPath();
-    ctx.arc(0, -u.radius * 0.05, 3, 0, Math.PI * 2);
+    ctx.arc(0.2, -1.8, 1.8, 0, Math.PI * 2);
     ctx.fill();
 
-    // Braced sparkling golden defensive barrier
+    // Braced shield wall golden aura sparkles
     if (isBraced) {
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
-      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.7)';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 0, u.radius * 1.45, -Math.PI * 0.55, Math.PI * 0.55);
+      ctx.arc(2, 0, 15, -Math.PI * 0.5, Math.PI * 0.5);
       ctx.stroke();
     }
     ctx.restore();
+
+    ctx.restore();
   }
 
-  // 2. Blue Highland Archer (Cyan/Teal Ranger with fine longbow)
+  // 2. Blue Highland Archer (Tabletop Miniature Ranger with Yew Longbow)
   private drawArcherUnit(u: Unit, gameTime: number) {
     const ctx = this.ctx;
+    const isFacingLeft = Math.cos(u.facing) < 0;
+    const flipX = isFacingLeft ? -1 : 1;
+    const isMoving = u.targetX !== undefined && Math.hypot(u.targetX - u.x, (u.targetY ?? u.y) - u.y) > 4;
+    const walkStep = isMoving ? Math.sin(gameTime * 14 + u.x * 0.2) * 3 : 0;
+    const attackProg = u.attackTimer > 0 ? (u.attackTimer / u.attackCooldown) : 0;
+    const bowDraw = attackProg > 0 ? Math.sin((1 - attackProg) * Math.PI) * 5 : 0;
 
-    // Tunic (Bright Cyan Ranger)
-    ctx.fillStyle = '#0284c7';
+    ctx.save();
+    ctx.translate(u.x, u.y);
+    ctx.scale(flipX, 1);
+
+    // 1. Leather Boots planted
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(-5 - walkStep, 5, 4, 3);
+    ctx.fillRect(1 + walkStep, 6, 4.5, 3);
+
+    // 2. Leather Vambraces & Trousers
+    ctx.fillStyle = '#0369a1';
+    ctx.fillRect(-4.5, 1, 3.5, 5);
+    ctx.fillRect(1.5, 2, 3.5, 5);
+
+    // 3. Cyan/Teal Ranger Tunic
+    const tunicGrad = ctx.createLinearGradient(-4, -5, 4, 3);
+    tunicGrad.addColorStop(0, '#0284c7');
+    tunicGrad.addColorStop(1, '#0369a1');
+    ctx.fillStyle = tunicGrad;
+    ctx.strokeStyle = '#075985';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(u.x, u.y, u.radius, 0, Math.PI * 2);
+    ctx.roundRect(-4.5, -5, 9, 7, 2);
     ctx.fill();
-    ctx.strokeStyle = '#0369a1';
-    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Ranger Hood & Feathers
-    ctx.fillStyle = '#0ea5e9';
+    // Cross-body leather quiver strap
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(u.x, u.y - 2, u.radius * 0.65, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(-4, -4);
+    ctx.lineTo(4, 2);
+    ctx.stroke();
 
-    // Cyan/Yellow feather plume
+    // 4. Back Quiver with Arrows
+    ctx.fillStyle = '#92400e';
+    ctx.fillRect(-7, -8, 4, 10);
+    ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(-6.5, -11, 1.5, 3);
+    ctx.fillRect(-4.5, -10, 1.5, 2);
+
+    // 5. Ranger Hood & Head
+    ctx.fillStyle = '#0ea5e9';
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(-4, -13, 8, 8, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // Shadow face opening
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, -10, 3.5, 3);
+
+    // Azure feather plume
     ctx.fillStyle = '#38bdf8';
     ctx.beginPath();
-    ctx.moveTo(u.x + 2, u.y - 6);
-    ctx.lineTo(u.x + 8, u.y - 12);
-    ctx.lineTo(u.x + 3, u.y - 8);
+    ctx.moveTo(-1, -13);
+    ctx.lineTo(-4, -18);
+    ctx.lineTo(0, -15);
+    ctx.closePath();
     ctx.fill();
 
-    // Quiver with arrows on back
-    ctx.fillStyle = '#92400e';
-    ctx.fillRect(u.x - u.radius - 2, u.y - 6, 4, 12);
-    ctx.fillStyle = '#fef08a';
-    ctx.fillRect(u.x - u.radius - 1, u.y - 9, 2, 3);
-
-    // Longbow
+    // 6. Recurve Yew Bow & Arrow
     ctx.save();
-    ctx.translate(u.x + 6, u.y);
-    ctx.rotate(u.facing);
-    ctx.strokeStyle = '#92400e';
-    ctx.lineWidth = 3;
+    ctx.translate(5, -2);
+
+    ctx.strokeStyle = '#b45309';
+    ctx.lineWidth = 2.4;
     ctx.beginPath();
-    ctx.arc(0, 0, u.radius * 1.25, -Math.PI * 0.45, Math.PI * 0.45);
+    ctx.moveTo(1, -12);
+    ctx.quadraticCurveTo(5, 0, 1, 12);
     ctx.stroke();
 
-    // Bowstring
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(0, -13, 2, 2);
+    ctx.fillRect(0, 11, 2, 2);
+
     ctx.strokeStyle = '#f8fafc';
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    const tipTopY = -u.radius * 1.25 * Math.sin(Math.PI * 0.45);
-    const tipBotY = u.radius * 1.25 * Math.sin(Math.PI * 0.45);
-    const tipX = u.radius * 1.25 * Math.cos(Math.PI * 0.45);
-    ctx.moveTo(tipX, tipTopY);
-    ctx.lineTo(1, 0);
-    ctx.lineTo(tipX, tipBotY);
+    ctx.moveTo(1, -12);
+    ctx.lineTo(-2 - bowDraw, 0);
+    ctx.lineTo(1, 12);
     ctx.stroke();
 
-    // Nocked arrow with steel tip
     ctx.strokeStyle = '#78350f';
     ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.moveTo(1, 0);
-    ctx.lineTo(tipX + 8, 0);
+    ctx.moveTo(-2 - bowDraw, 0);
+    ctx.lineTo(10, 0);
     ctx.stroke();
+
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.moveTo(tipX + 8, -2);
-    ctx.lineTo(tipX + 13, 0);
-    ctx.lineTo(tipX + 8, 2);
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-  // 3. Blue Knight Cavalry (Vibrant Galloping Warhorse & Pennoned Lance)
-  private drawCavalryUnit(u: Unit, gameTime: number) {
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.translate(u.x, u.y);
-    ctx.rotate(u.facing);
-
-    // Gallop leg animation
-    const gallop = Math.sin(gameTime * 18);
-
-    // Warm Chestnut Warhorse
-    ctx.fillStyle = '#6b3a1d';
-    ctx.beginPath();
-    ctx.ellipse(0, 0, u.radius * 1.35, u.radius * 0.85, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Horse legs (animated gallop)
-    ctx.strokeStyle = '#4a2612';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    // Front legs
-    ctx.moveTo(u.radius * 0.8, 4);
-    ctx.lineTo(u.radius * 1.2 + gallop * 4, 10);
-    // Rear legs
-    ctx.moveTo(-u.radius * 0.8, 4);
-    ctx.lineTo(-u.radius * 1.2 - gallop * 4, 10);
-    ctx.stroke();
-
-    // Royal Blue Caparison / Saddle Cloth with bright gold border
-    const caparisonGrad = ctx.createLinearGradient(-u.radius * 0.7, 0, u.radius * 0.7, 0);
-    caparisonGrad.addColorStop(0, '#2563eb');
-    caparisonGrad.addColorStop(1, '#3b82f6');
-    ctx.fillStyle = caparisonGrad;
-    ctx.fillRect(-u.radius * 0.7, -u.radius * 0.65, u.radius * 1.4, u.radius * 1.3);
-    ctx.strokeStyle = '#facc15';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(-u.radius * 0.7, -u.radius * 0.65, u.radius * 1.4, u.radius * 1.3);
-
-    // Warhorse Head & Neck with animated bob
-    const headBob = gallop * 2;
-    ctx.fillStyle = '#552e17';
-    ctx.beginPath();
-    ctx.ellipse(u.radius * 1.15, -3 + headBob, u.radius * 0.65, u.radius * 0.5, 0.25, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Horse Mane
-    ctx.fillStyle = '#facc15';
-    ctx.fillRect(u.radius * 0.8, -8 + headBob, 6, 4);
-
-    // Knight in Gleaming Steel Armor
-    ctx.fillStyle = '#cbd5e1';
-    ctx.beginPath();
-    ctx.arc(0, 0, u.radius * 0.65, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#94a3b8';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Specular shine on Knight
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(-2, -2, u.radius * 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Flowing Crimson & Gold Plume
-    ctx.fillStyle = '#ef4444';
-    ctx.beginPath();
-    ctx.moveTo(-2, -u.radius * 0.7);
-    ctx.lineTo(-6, -u.radius * 1.4);
-    ctx.lineTo(2, -u.radius * 0.9);
-    ctx.fill();
-
-    // Long Jouster Lance
-    ctx.strokeStyle = '#78350f';
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(u.radius * 0.4, 4);
-    ctx.lineTo(u.radius * 2.5, 4);
-    ctx.stroke();
-
-    // Steel Spearhead
-    ctx.fillStyle = '#f8fafc';
-    ctx.beginPath();
-    ctx.moveTo(u.radius * 2.5, 1);
-    ctx.lineTo(u.radius * 3.0, 4);
-    ctx.lineTo(u.radius * 2.5, 7);
+    ctx.moveTo(10, -2);
+    ctx.lineTo(14, 0);
+    ctx.lineTo(10, 2);
     ctx.closePath();
     ctx.fill();
 
-    // Fluttering Lance Pennon Flag
-    const pennonWave = Math.sin(gameTime * 15) * 3;
     ctx.fillStyle = '#38bdf8';
+    ctx.fillRect(-1 - bowDraw, -2, 2, 4);
+
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // 3. Blue Knight Cavalry (Tabletop Miniature Armored Warhorse & Lance Knight)
+  private drawCavalryUnit(u: Unit, gameTime: number) {
+    const ctx = this.ctx;
+    const isFacingLeft = Math.cos(u.facing) < 0;
+    const flipX = isFacingLeft ? -1 : 1;
+    const gallop = Math.sin(gameTime * 18);
+    const attackProg = u.attackTimer > 0 ? (u.attackTimer / u.attackCooldown) : 0;
+    const lanceThrust = attackProg > 0 ? Math.sin((1 - attackProg) * Math.PI) * 12 : 0;
+
+    ctx.save();
+    ctx.translate(u.x, u.y);
+    ctx.scale(flipX, 1);
+
+    // 1. Armored Warhorse
+    ctx.strokeStyle = '#4a2612';
+    ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.moveTo(u.radius * 2.1, 4);
-    ctx.lineTo(u.radius * 2.5 + pennonWave, 8);
-    ctx.lineTo(u.radius * 2.5, 4);
+    ctx.moveTo(8, 4);
+    ctx.lineTo(13 + gallop * 5, 11);
+    ctx.moveTo(6, 4);
+    ctx.lineTo(10 - gallop * 4, 11);
+    ctx.moveTo(-8, 4);
+    ctx.lineTo(-12 - gallop * 5, 11);
+    ctx.moveTo(-6, 4);
+    ctx.lineTo(-9 + gallop * 4, 11);
+    ctx.stroke();
+
+    // Hooves
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(11 + gallop * 5, 10, 4, 2);
+    ctx.fillRect(-14 - gallop * 5, 10, 4, 2);
+
+    // Muscular torso
+    ctx.fillStyle = '#6b3a1d';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 16, 10, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Momentum Golden Speed Trails & Wind Blasts
+    // Royal Blue Caparison (Cloth Barding with Gold Trim)
+    const capGrad = ctx.createLinearGradient(-10, 0, 10, 0);
+    capGrad.addColorStop(0, '#1d4ed8');
+    capGrad.addColorStop(1, '#2563eb');
+    ctx.fillStyle = capGrad;
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.roundRect(-10, -7, 20, 13, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // Warhorse Head & Neck with Steel Chamfron
+    const headBob = gallop * 2;
+    ctx.fillStyle = '#552e17';
+    ctx.beginPath();
+    ctx.ellipse(14, -4 + headBob, 8, 6, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Steel Chamfron Armor Faceplate
+    ctx.fillStyle = '#94a3b8';
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(13, -8 + headBob);
+    ctx.lineTo(19, -4 + headBob);
+    ctx.lineTo(16, 1 + headBob);
+    ctx.lineTo(11, -3 + headBob);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(10, -10 + headBob, 5, 4);
+
+    // 2. Knight Rider in Gleaming Steel Plate
+    ctx.fillStyle = '#cbd5e1';
+    ctx.fillRect(-2, -3, 6, 6);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(-4, -11, 8, 8, 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#e2e8f0';
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.roundRect(-3.5, -18, 7, 7, 2.5);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, -15, 3, 1.5);
+
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    ctx.moveTo(-2, -18);
+    ctx.lineTo(-7, -23);
+    ctx.lineTo(-3, -19);
+    ctx.closePath();
+    ctx.fill();
+
+    // 3. Couched Heavy Jouster Lance
+    ctx.save();
+    ctx.translate(4, -4);
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(-6, 0);
+    ctx.lineTo(24 + lanceThrust, 0);
+    ctx.stroke();
+
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.moveTo(2, -4);
+    ctx.lineTo(6, 0);
+    ctx.lineTo(2, 4);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(24 + lanceThrust, -3);
+    ctx.lineTo(32 + lanceThrust, 0);
+    ctx.lineTo(24 + lanceThrust, 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    const pennonWave = Math.sin(gameTime * 15) * 4;
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.moveTo(18 + lanceThrust, 0);
+    ctx.lineTo(25 + lanceThrust + pennonWave, 6);
+    ctx.lineTo(25 + lanceThrust, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Momentum Golden Speed Trails
     if (u.momentum > 1.3) {
-      ctx.strokeStyle = '#facc15';
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.7)';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(-u.radius * 1.6, -5);
-      ctx.lineTo(-u.radius * 2.7, -5);
-      ctx.moveTo(-u.radius * 1.6, 5);
-      ctx.lineTo(-u.radius * 3.0, 5);
+      ctx.moveTo(-18, -4);
+      ctx.lineTo(-32, -4);
+      ctx.moveTo(-18, 4);
+      ctx.lineTo(-35, 4);
       ctx.stroke();
     }
 
     ctx.restore();
   }
 
-  // 4. Red Swordsman (Energetic Barbarian Infantry)
+  // 4. Red Swordsman (Tabletop Miniature Barbarian Raider with Broadsword & Buckler)
   private drawRedSwordsman(u: Unit, gameTime: number) {
     const ctx = this.ctx;
-    // Energetic Crimson Barbarian Body
-    ctx.fillStyle = '#dc2626';
-    ctx.beginPath();
-    ctx.arc(u.x, u.y, u.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#991b1b';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    const isFacingLeft = Math.cos(u.facing) < 0;
+    const flipX = isFacingLeft ? -1 : 1;
+    const isMoving = u.targetX !== undefined && Math.hypot(u.targetX - u.x, (u.targetY ?? u.y) - u.y) > 4;
+    const walkStep = isMoving ? Math.sin(gameTime * 14 + u.x * 0.2) * 3 : 0;
+    const attackProg = u.attackTimer > 0 ? (u.attackTimer / u.attackCooldown) : 0;
+    const slashAngle = attackProg > 0 ? Math.sin((1 - attackProg) * Math.PI) * 1.5 : 0;
 
-    // Round Barbarian Wooden Shield with Iron Spikes
-    ctx.fillStyle = '#854d0e';
-    ctx.beginPath();
-    ctx.arc(u.x + 4, u.y, u.radius * 0.7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    // Iron Boss
-    ctx.fillStyle = '#f1f5f9';
-    ctx.beginPath();
-    ctx.arc(u.x + 4, u.y, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Spiked Helmet with animated horns
-    ctx.fillStyle = '#334155';
-    ctx.beginPath();
-    ctx.arc(u.x - 2, u.y - 2, u.radius * 0.55, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Barbarian Battleaxe
-    ctx.save();
-    ctx.translate(u.x - 5, u.y);
-    ctx.rotate(u.facing);
-    ctx.strokeStyle = '#52525b';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(u.radius * 1.3, 0);
-    ctx.stroke();
-
-    // Curved Steel Axe Blade
-    ctx.fillStyle = '#e2e8f0';
-    ctx.beginPath();
-    ctx.moveTo(u.radius * 0.85, -7);
-    ctx.lineTo(u.radius * 1.35, -10);
-    ctx.lineTo(u.radius * 1.35, 10);
-    ctx.lineTo(u.radius * 0.85, 7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // 5. Red Spearman (Barbarian Polearm Guard)
-  private drawRedSpearman(u: Unit, gameTime: number) {
-    const ctx = this.ctx;
-    ctx.fillStyle = '#b91c1c';
-    ctx.beginPath();
-    ctx.arc(u.x, u.y, u.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#7f1d1d';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Helmet
-    ctx.fillStyle = '#475569';
-    ctx.beginPath();
-    ctx.arc(u.x - 2, u.y - 2, u.radius * 0.55, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Long Barbarian Spear
     ctx.save();
     ctx.translate(u.x, u.y);
-    ctx.rotate(u.facing);
-    ctx.strokeStyle = '#78350f';
-    ctx.lineWidth = 3;
+    ctx.scale(flipX, 1);
+
+    // 1. Fur boots planted
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(-5 - walkStep, 5, 4.5, 3);
+    ctx.fillRect(1 + walkStep, 6, 5, 3);
+
+    // 2. Barbarian Legs & Crimson Trousers
+    ctx.fillStyle = '#7f1d1d';
+    ctx.fillRect(-4.5, 1, 3.5, 5);
+    ctx.fillRect(1.5, 2, 3.5, 5);
+
+    // 3. Muscular Torso & Studded Leather Harness
+    ctx.fillStyle = '#d97706';
+    ctx.fillRect(-5, -5, 10, 7);
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(-u.radius * 0.5, 3);
-    ctx.lineTo(u.radius * 2.3, 3);
+    ctx.moveTo(-5, -5);
+    ctx.lineTo(5, 2);
+    ctx.moveTo(5, -5);
+    ctx.lineTo(-5, 2);
+    ctx.stroke();
+    ctx.fillStyle = '#94a3b8';
+    ctx.beginPath();
+    ctx.arc(0, -1.5, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Spiked Iron Spangenhelm & Bearded Face
+    ctx.fillStyle = '#475569';
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.roundRect(-4.5, -13, 9, 8, 3);
+    ctx.fill();
     ctx.stroke();
 
-    // Broad Leaf-shaped Steel Spearhead
-    ctx.fillStyle = '#f1f5f9';
+    ctx.strokeStyle = '#fef08a';
+    ctx.lineWidth = 2.2;
     ctx.beginPath();
-    ctx.moveTo(u.radius * 2.3, 0);
-    ctx.lineTo(u.radius * 2.9, 3);
-    ctx.lineTo(u.radius * 2.3, 6);
+    ctx.moveTo(-4, -11);
+    ctx.lineTo(-8, -15);
+    ctx.moveTo(4, -11);
+    ctx.lineTo(8, -15);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(-1, -9.5, 4.5, 1.5);
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(1, -9, 2, 1);
+
+    // 5. Left Arm: Spiked Round Wooden Buckler Shield
+    ctx.save();
+    ctx.translate(5, -1);
+    ctx.fillStyle = '#854d0e';
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.arc(0, 0, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#94a3b8';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(0, 0, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 6. Right Arm: Notched Heavy Broadsword with Slash Arc
+    ctx.save();
+    ctx.translate(-4, -3);
+    ctx.rotate(0.4 + slashAngle);
+
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(-1, 0, 2, 3);
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(-3, -1.5, 6, 1.5);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(-1.5, -1.5);
+    ctx.lineTo(-2, -14);
+    ctx.lineTo(1.5, -16);
+    ctx.lineTo(2, -1.5);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
+
+    if (attackProg > 0.1 && attackProg < 0.85) {
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.7)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, 17, -Math.PI * 0.7, -Math.PI * 0.1);
+      ctx.stroke();
+    }
+    ctx.restore();
+
     ctx.restore();
   }
 
-  // 6. Red Enemy Archer (Vibrant Crimson Raider)
+  // 5. Red Spearman (Tabletop Miniature Barbarian Pikeman with Thrusting Spear)
+  private drawRedSpearman(u: Unit, gameTime: number) {
+    const ctx = this.ctx;
+    const isFacingLeft = Math.cos(u.facing) < 0;
+    const flipX = isFacingLeft ? -1 : 1;
+    const isMoving = u.targetX !== undefined && Math.hypot(u.targetX - u.x, (u.targetY ?? u.y) - u.y) > 4;
+    const walkStep = isMoving ? Math.sin(gameTime * 14 + u.x * 0.2) * 3 : 0;
+    const attackProg = u.attackTimer > 0 ? (u.attackTimer / u.attackCooldown) : 0;
+    const spearThrust = attackProg > 0 ? Math.sin((1 - attackProg) * Math.PI) * 11 : 0;
+
+    ctx.save();
+    ctx.translate(u.x, u.y);
+    ctx.scale(flipX, 1);
+
+    // 1. Leather boots
+    ctx.fillStyle = '#381705';
+    ctx.fillRect(-5 - walkStep, 5, 4.5, 3);
+    ctx.fillRect(1 + walkStep, 6, 5, 3);
+
+    // 2. Crimson Tunic & Legs
+    ctx.fillStyle = '#991b1b';
+    ctx.fillRect(-4.5, -5, 9, 11);
+    ctx.strokeStyle = '#7f1d1d';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-4.5, -5, 9, 11);
+
+    // 3. Conical Iron Helm
+    ctx.fillStyle = '#64748b';
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, -16);
+    ctx.lineTo(4.5, -8);
+    ctx.lineTo(-4.5, -8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Eyes slit
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, -9, 3, 1.5);
+
+    // 4. Long Barbarian Pike with Thrust Animation
+    ctx.save();
+    ctx.translate(2, -2);
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-10, 0);
+    ctx.lineTo(18 + spearThrust, 0);
+    ctx.stroke();
+
+    ctx.fillStyle = '#f1f5f9';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(18 + spearThrust, -3);
+    ctx.lineTo(26 + spearThrust, 0);
+    ctx.lineTo(18 + spearThrust, 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(16 + spearThrust, -2, 2.5, 4);
+
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // 6. Red Enemy Archer (Tabletop Miniature Wolf-Pelt Hunter with Shortbow)
   private drawRedArcher(u: Unit, gameTime: number) {
     const ctx = this.ctx;
-    // Cowl & Tunic
-    ctx.fillStyle = '#ef4444';
-    ctx.beginPath();
-    ctx.arc(u.x, u.y, u.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#b91c1c';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    const isFacingLeft = Math.cos(u.facing) < 0;
+    const flipX = isFacingLeft ? -1 : 1;
+    const isMoving = u.targetX !== undefined && Math.hypot(u.targetX - u.x, (u.targetY ?? u.y) - u.y) > 4;
+    const walkStep = isMoving ? Math.sin(gameTime * 14 + u.x * 0.2) * 3 : 0;
+    const attackProg = u.attackTimer > 0 ? (u.attackTimer / u.attackCooldown) : 0;
+    const bowDraw = attackProg > 0 ? Math.sin((1 - attackProg) * Math.PI) * 4 : 0;
 
-    // Red Hood
-    ctx.fillStyle = '#dc2626';
-    ctx.beginPath();
-    ctx.arc(u.x, u.y - 2, u.radius * 0.65, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Wooden Bow
     ctx.save();
-    ctx.translate(u.x - 4, u.y);
-    ctx.rotate(u.facing);
-    ctx.strokeStyle = '#78350f';
-    ctx.lineWidth = 2.8;
+    ctx.translate(u.x, u.y);
+    ctx.scale(flipX, 1);
+
+    // 1. Leather boots
+    ctx.fillStyle = '#29180c';
+    ctx.fillRect(-5 - walkStep, 5, 4, 3);
+    ctx.fillRect(1 + walkStep, 6, 4.5, 3);
+
+    // 2. Red hunter tunic
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(-4.5, -4, 9, 10);
+    ctx.strokeStyle = '#991b1b';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-4.5, -4, 9, 10);
+
+    // 3. Wolf Fur Hood & Cowl
+    ctx.fillStyle = '#52525b';
     ctx.beginPath();
-    ctx.arc(0, 0, u.radius * 1.15, -Math.PI * 0.45, Math.PI * 0.45);
+    ctx.roundRect(-4.5, -12, 9, 8, 3);
+    ctx.fill();
+
+    // Wolf ears
+    ctx.fillStyle = '#3f3f46';
+    ctx.beginPath();
+    ctx.moveTo(-3, -12);
+    ctx.lineTo(-5, -16);
+    ctx.lineTo(-1, -13);
+    ctx.moveTo(1, -13);
+    ctx.lineTo(4, -16);
+    ctx.lineTo(3, -12);
+    ctx.fill();
+
+    ctx.fillStyle = '#09090b';
+    ctx.fillRect(0, -9, 3, 2);
+
+    // 4. Shortbow & Barbed Arrow
+    ctx.save();
+    ctx.translate(4, -1);
+    ctx.strokeStyle = '#78350f';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, -Math.PI * 0.45, Math.PI * 0.45);
     ctx.stroke();
 
-    // String
     ctx.strokeStyle = '#f1f5f9';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    const tipY = u.radius * 1.15 * Math.sin(Math.PI * 0.45);
-    const tipX = u.radius * 1.15 * Math.cos(Math.PI * 0.45);
+    const tipY = 10 * Math.sin(Math.PI * 0.45);
+    const tipX = 10 * Math.cos(Math.PI * 0.45);
     ctx.moveTo(tipX, -tipY);
-    ctx.lineTo(2, 0);
+    ctx.lineTo(1 - bowDraw, 0);
     ctx.lineTo(tipX, tipY);
     ctx.stroke();
+
+    ctx.strokeStyle = '#451a03';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(1 - bowDraw, 0);
+    ctx.lineTo(tipX + 6, 0);
+    ctx.stroke();
+
+    ctx.fillStyle = '#f87171';
+    ctx.beginPath();
+    ctx.moveTo(tipX + 6, -2);
+    ctx.lineTo(tipX + 10, 0);
+    ctx.lineTo(tipX + 6, 2);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
     ctx.restore();
   }
 
-  // 7. Red Brute Boss (Energetic Massive Barbarian Juggernaut)
+  // 7. Red Brute Boss (Tabletop Miniature Hulking Barbarian Juggernaut)
   private drawRedBrute(u: Unit, gameTime: number) {
     const ctx = this.ctx;
+    const isFacingLeft = Math.cos(u.facing) < 0;
+    const flipX = isFacingLeft ? -1 : 1;
+    const attackProg = u.attackTimer > 0 ? (u.attackTimer / u.attackCooldown) : 0;
+    const cleaveLift = u.isCleaving && u.cleaveWindupTimer !== undefined
+      ? (1 - (u.cleaveWindupTimer / 0.65))
+      : 0;
+    const clubAngle = cleaveLift > 0
+      ? -Math.PI * 0.6 + cleaveLift * 0.2
+      : (attackProg > 0 ? Math.sin((1 - attackProg) * Math.PI) * 1.6 : 0);
 
     // Cleave windup telegraphed bright red/orange ground danger zone
     if (u.isCleaving && u.cleaveWindupTimer !== undefined) {
@@ -968,80 +1488,104 @@ export class GameRenderer {
       ctx.restore();
     }
 
-    // Huge hulking body (Deep barbarian crimson & bronze)
-    const bodyGrad = ctx.createLinearGradient(u.x - u.radius, u.y - u.radius, u.x + u.radius, u.y + u.radius);
+    ctx.save();
+    ctx.translate(u.x, u.y);
+    ctx.scale(flipX, 1);
+
+    // 1. Massive Spiked Iron Boots
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(-10, 10, 9, 6);
+    ctx.fillRect(3, 11, 10, 6);
+    ctx.fillStyle = '#facc15';
+    ctx.fillRect(-11, 13, 2, 3);
+    ctx.fillRect(12, 14, 2, 3);
+
+    // 2. Colossal Muscular Barbarian Torso
+    const bodyGrad = ctx.createLinearGradient(-14, -14, 14, 14);
     bodyGrad.addColorStop(0, '#dc2626');
-    bodyGrad.addColorStop(1, '#991b1b');
+    bodyGrad.addColorStop(1, '#7f1d1d');
     ctx.fillStyle = bodyGrad;
-    ctx.beginPath();
-    ctx.arc(u.x, u.y, u.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#7f1d1d';
+    ctx.strokeStyle = '#450a0a';
     ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.roundRect(-14, -12, 28, 22, 5);
+    ctx.fill();
     ctx.stroke();
 
-    // Massive Bronze Spiked Pauldrons
+    // Heavy iron spiked belt
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(-15, 3, 30, 6);
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    ctx.arc(0, 6, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. Massive Spiked Bronze Pauldrons
     ctx.fillStyle = '#b45309';
     ctx.strokeStyle = '#f59e0b';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(u.x - 12, u.y - 14, 11, 0, Math.PI * 2);
-    ctx.arc(u.x + 12, u.y - 14, 11, 0, Math.PI * 2);
+    ctx.arc(-14, -12, 10, 0, Math.PI * 2);
+    ctx.arc(14, -12, 10, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Spikes on pauldrons
     ctx.fillStyle = '#facc15';
-    ctx.fillRect(u.x - 14, u.y - 28, 4, 6);
-    ctx.fillRect(u.x + 10, u.y - 28, 4, 6);
+    ctx.fillRect(-16, -26, 4, 6);
+    ctx.fillRect(12, -26, 4, 6);
 
-    // Iron Skull Helm
-    ctx.fillStyle = '#475569';
-    ctx.beginPath();
-    ctx.arc(u.x, u.y - 6, u.radius * 0.55, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#1e293b';
+    // 4. Iron Skull Great Helm with Giant Curved Horns
+    ctx.fillStyle = '#334155';
+    ctx.strokeStyle = '#0f172a';
     ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Glowing ruby eyes
-    ctx.fillStyle = '#f87171';
-    ctx.fillRect(u.x - 5, u.y - 7, 3, 2);
-    ctx.fillRect(u.x + 2, u.y - 7, 3, 2);
-
-    // Giant Golden Curved Horns
-    ctx.strokeStyle = '#facc15';
-    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(u.x - 10, u.y - 12);
-    ctx.quadraticCurveTo(u.x - 22, u.y - 18, u.x - 24, u.y - 24);
-    ctx.moveTo(u.x + 10, u.y - 12);
-    ctx.quadraticCurveTo(u.x + 22, u.y - 18, u.x + 24, u.y - 24);
+    ctx.roundRect(-8, -24, 16, 14, 4);
+    ctx.fill();
     ctx.stroke();
 
-    // Massive Spiked Warclub
+    // Glowing Ruby Eyes
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(-4, -18, 3, 2);
+    ctx.fillRect(2, -18, 3, 2);
+
+    // Giant Golden Curved Bull Horns
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(-6, -23);
+    ctx.quadraticCurveTo(-18, -30, -22, -35);
+    ctx.moveTo(6, -23);
+    ctx.quadraticCurveTo(18, -30, 22, -35);
+    ctx.stroke();
+
+    // 5. Massive Spiked Warclub / Greataxe
     ctx.save();
-    ctx.translate(u.x - 14, u.y);
-    ctx.rotate(u.facing + (u.isCleaving ? Math.PI * 0.4 : 0));
+    ctx.translate(6, -8);
+    ctx.rotate(clubAngle);
+
     ctx.fillStyle = '#573318';
-    ctx.fillRect(0, -7, 36, 14);
+    ctx.fillRect(0, -6, 38, 12);
     ctx.strokeStyle = '#29180c';
     ctx.lineWidth = 2;
-    ctx.strokeRect(0, -7, 36, 14);
+    ctx.strokeRect(0, -6, 38, 12);
 
-    // Golden & Steel Spikes
     ctx.fillStyle = '#facc15';
-    for (let sp = 10; sp <= 32; sp += 7) {
-      ctx.fillRect(sp, -11, 4, 4);
-      ctx.fillRect(sp, 7, 4, 4);
+    for (let sp = 12; sp <= 34; sp += 7) {
+      ctx.fillRect(sp, -10, 4, 4);
+      ctx.fillRect(sp, 6, 4, 4);
     }
     ctx.restore();
 
-    // Overhead Boss HP Bar (💀 680 HP)
+    ctx.restore();
+
+    // Overhead Boss HP Bar
     this.drawBossHpBar(u);
   }
 
   private drawBossHpBar(u: Unit) {
+    // Only display boss health bar once he takes damage or begins combat
+    if (u.hp >= u.maxHp - 0.5 && !u.isCleaving) return;
+
     const ctx = this.ctx;
     const barW = 140;
     const barH = 14;
@@ -1049,24 +1593,20 @@ export class GameRenderer {
     const barY = u.y - u.radius - 32;
 
     ctx.save();
-    // Drop shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.beginPath();
     ctx.roundRect(barX - 2, barY - 2, barW + 4, barH + 4, 6);
     ctx.fill();
 
-    // Gold outer frame
     ctx.strokeStyle = '#facc15';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    // Background track
     ctx.fillStyle = '#450a0a';
     ctx.beginPath();
     ctx.roundRect(barX, barY, barW, barH, 4);
     ctx.fill();
 
-    // Health Fill (Vibrant red to crimson gradient)
     const fillW = Math.max(0, (u.hp / u.maxHp) * barW);
     const grad = ctx.createLinearGradient(barX, 0, barX + barW, 0);
     grad.addColorStop(0, '#f87171');
@@ -1077,11 +1617,9 @@ export class GameRenderer {
     ctx.roundRect(barX, barY, fillW, barH, 4);
     ctx.fill();
 
-    // Top shine highlight
     ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
     ctx.fillRect(barX + 2, barY + 1, Math.max(0, fillW - 4), barH * 0.4);
 
-    // Label with Skull
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 11px system-ui, sans-serif';
     ctx.textAlign = 'center';
@@ -1093,27 +1631,32 @@ export class GameRenderer {
   }
 
   private drawHealthBar(u: Unit) {
-    // For regular units (not the Brute boss which has dedicated large bar)
     if (u.type === 'brute') return;
 
+    // Sembunyikan jika HP masih penuh (100%)
+    if (u.hp >= u.maxHp - 0.5) return;
+
     const ctx = this.ctx;
-    const barW = u.radius * 2.2;
-    const barH = 4.5;
+    const barW = Math.max(20, u.radius * 1.8);
+    const barH = 3.5;
     const barX = u.x - barW / 2;
-    const barY = u.y - u.radius - 9;
+    const barY = u.y - u.radius - 12;
 
     ctx.save();
-    // Soft shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
     ctx.beginPath();
-    ctx.roundRect(barX - 1, barY - 1, barW + 2, barH + 2, 3);
+    ctx.roundRect(barX - 1, barY - 1, barW + 2, barH + 2, 2);
     ctx.fill();
 
-    // Health fill (Bright blue for blue alliance, bright coral red for red barbarians)
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, barW, barH, 1.5);
+    ctx.fill();
+
     const fillW = Math.max(0, (u.hp / u.maxHp) * barW);
     ctx.fillStyle = u.isPlayer ? '#38bdf8' : '#f87171';
     ctx.beginPath();
-    ctx.roundRect(barX, barY, fillW, barH, 2.5);
+    ctx.roundRect(barX, barY, fillW, barH, 1.5);
     ctx.fill();
     ctx.restore();
   }
