@@ -7,7 +7,14 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { GameEngine } from './game/engine.ts';
 import { GameRenderer } from './game/renderer.ts';
 import { soundEngine } from './game/audio.ts';
-import { SquadType, Point } from './game/types.ts';
+import {
+  SquadType,
+  SquadSpecialization,
+  Point,
+  MetaProgressionState,
+  MetaUpgradeId,
+} from './game/types.ts';
+import { loadMetaProgression } from './game/rules.ts';
 import { HUD } from './components/HUD.tsx';
 import { TitleScreen } from './components/TitleScreen.tsx';
 import {
@@ -16,6 +23,7 @@ import {
   GameOverModal,
   ReinforcementModal,
   TacticalGuideModal,
+  RoyalArmoryModal,
 } from './components/Modals.tsx';
 
 type GameState = 'title' | 'playing' | 'paused' | 'reinforcement' | 'victory' | 'gameover';
@@ -31,6 +39,10 @@ export default function App() {
   const [gameSpeed, setGameSpeed] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [showGuide, setShowGuide] = useState<boolean>(false);
+  const [showArmory, setShowArmory] = useState<boolean>(false);
+  const [metaState, setMetaState] = useState<MetaProgressionState>(() =>
+    loadMetaProgression()
+  );
   const [waveClearedNumber, setWaveClearedNumber] = useState<number>(1);
 
   // Throttled HUD State for React rendering
@@ -174,7 +186,8 @@ export default function App() {
 
       const engine = engineRef.current;
       if (engine && gameState === 'playing') {
-        engine.update(dt * gameSpeed);
+        const effectiveSpeed = engine.isTacticalFocus ? 0.25 : gameSpeed;
+        engine.update(dt * effectiveSpeed);
       }
 
       // Render 60 FPS Canvas with High-DPI buffer
@@ -187,7 +200,11 @@ export default function App() {
           drawnStrokeRef.current,
           selectedSquad,
           engine.goldRings,
-          currentTime / 1000
+          currentTime / 1000,
+          engine.barricades,
+          engine.isTacticalFocus,
+          engine.groundDecals,
+          engine.shakeIntensity
         );
       }
 
@@ -199,6 +216,10 @@ export default function App() {
         setSquadsState({ ...engine.squads });
         setRallyHornTimer(engine.rallyHornTimer);
         setActionBanner(engine.actionBanner);
+        setMetaState({
+          ...engine.meta,
+          upgrades: { ...engine.meta.upgrades },
+        });
       }
 
       animFrameId = requestAnimationFrame(loop);
@@ -214,14 +235,14 @@ export default function App() {
   // 4. Pointer & Line Drawing Handlers with dynamic viewport scaling
   const screenToWorld = useCallback((clientX: number, clientY: number): Point => {
     const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
+    if (!canvas) return { x: 20, y: 78 };
     const rect = canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
+    if (rect.width <= 0 || rect.height <= 0) return { x: 20, y: 78 };
     const scaleX = 1200 / rect.width;
     const scaleY = 700 / rect.height;
     return {
-      x: Math.max(0, Math.min(1200, (clientX - rect.left) * scaleX)),
-      y: Math.max(0, Math.min(700, (clientY - rect.top) * scaleY)),
+      x: Math.max(20, Math.min(1180, (clientX - rect.left) * scaleX)),
+      y: Math.max(78, Math.min(545, (clientY - rect.top) * scaleY)),
     };
   }, []);
 
@@ -272,12 +293,23 @@ export default function App() {
       } else if (e.key === '3') {
         setSelectedSquad('cavalry');
         soundEngine.playClick();
+      } else if (e.key === '4' || e.key === 'h' || e.key === 'H') {
+        engineRef.current?.triggerRallyHorn();
       } else if (e.key === 't' || e.key === 'T') {
         engineRef.current?.toggleShieldStance();
       } else if (e.key === 'v' || e.key === 'V') {
         engineRef.current?.triggerTargetedVolley();
-      } else if (e.key === 'h' || e.key === 'H') {
-        engineRef.current?.triggerRallyHorn();
+      } else if (e.key === 'f' || e.key === 'F') {
+        engineRef.current?.toggleFireArrows();
+      } else if (e.key === 'b' || e.key === 'B') {
+        engineRef.current?.deployBarricade();
+      } else if (e.key === 'd' || e.key === 'D') {
+        engineRef.current?.commandArmyDefend();
+      } else if (e.key === 'a' || e.key === 'A') {
+        engineRef.current?.commandArmyAttack();
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        engineRef.current?.toggleTacticalFocus();
       } else if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
         setGameState((prev) => (prev === 'playing' ? 'paused' : prev === 'paused' ? 'playing' : prev));
       } else if (e.key === 'm' || e.key === 'M') {
@@ -331,6 +363,36 @@ export default function App() {
     setGameState('playing');
   };
 
+  const handlePurchaseUpgrade = (id: MetaUpgradeId) => {
+    if (engineRef.current?.purchaseMetaUpgrade(id)) {
+      setMetaState({
+        ...engineRef.current.meta,
+        upgrades: { ...engineRef.current.meta.upgrades },
+        selectedSpecialists: { ...(engineRef.current.meta.selectedSpecialists ?? {}) },
+      });
+    }
+  };
+
+  const handleSelectSpecialist = (squad: SquadType, spec: SquadSpecialization | null) => {
+    if (!engineRef.current) return;
+    engineRef.current.selectSquadSpecialization(squad, spec);
+    setMetaState({
+      ...engineRef.current.meta,
+      upgrades: { ...engineRef.current.meta.upgrades },
+      selectedSpecialists: { ...(engineRef.current.meta.selectedSpecialists ?? {}) },
+    });
+    setSquadsState({
+      shield: { ...engineRef.current.squads.shield },
+      archer: { ...engineRef.current.squads.archer },
+      cavalry: { ...engineRef.current.squads.cavalry },
+    });
+  };
+
+  const handleContinueEndless = () => {
+    soundEngine.playClick();
+    engineRef.current?.startEndlessCrusade();
+  };
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-gradient-to-b from-sky-200 via-amber-50 to-emerald-100 flex items-center justify-center font-sans">
       {/* 1. Canvas Viewport (1200x700 aspect ratio strictly preserved) */}
@@ -369,10 +431,24 @@ export default function App() {
               onTogglePause={handleTogglePause}
               isMuted={isMuted}
               onToggleMute={handleToggleMute}
-              gameSpeed={gameSpeed}
+              gameSpeed={engineRef.current?.isTacticalFocus ? 0.25 : gameSpeed}
               onToggleSpeed={handleToggleSpeed}
               onOpenGuide={() => setShowGuide(true)}
               onRestart={handleRestart}
+              fireArrowsActive={engineRef.current?.fireArrowsActive ?? false}
+              onToggleFireArrows={() => engineRef.current?.toggleFireArrows()}
+              barricadeStock={engineRef.current?.barricadeStock ?? 0}
+              onDeployBarricade={() => engineRef.current?.deployBarricade()}
+              isTacticalFocus={engineRef.current?.isTacticalFocus ?? false}
+              onToggleTacticalFocus={() => engineRef.current?.toggleTacticalFocus()}
+              onSelectSpecialization={(squad, spec) =>
+                engineRef.current?.selectSquadSpecialization(squad, spec)
+              }
+              warGold={metaState.warGold}
+              onOpenArmory={() => setShowArmory(true)}
+              armyOrder={engineRef.current?.armyOrder ?? 'defend'}
+              onArmyDefend={() => engineRef.current?.commandArmyDefend()}
+              onArmyAttack={() => engineRef.current?.commandArmyAttack()}
             />
           )}
 
@@ -381,6 +457,8 @@ export default function App() {
             <TitleScreen
               onStart={handleStartGame}
               onOpenGuide={() => setShowGuide(true)}
+              onOpenArmory={() => setShowArmory(true)}
+              meta={metaState}
             />
           )}
 
@@ -398,6 +476,8 @@ export default function App() {
             <VictoryModal
               stats={hudStats}
               onRestart={handleRestart}
+              onContinueEndless={handleContinueEndless}
+              onOpenArmory={() => setShowArmory(true)}
             />
           )}
 
@@ -406,6 +486,7 @@ export default function App() {
             <GameOverModal
               stats={hudStats}
               onRestart={handleRestart}
+              onOpenArmory={() => setShowArmory(true)}
             />
           )}
 
@@ -420,6 +501,30 @@ export default function App() {
           {/* 8. Tactical Guide Field Manual */}
           {showGuide && (
             <TacticalGuideModal onClose={() => setShowGuide(false)} />
+          )}
+
+          {/* 9. Royal Armory Permanent Meta-Progression & Squad Specialist Modal */}
+          {showArmory && (
+            <RoyalArmoryModal
+              meta={metaState}
+              onUpgrade={handlePurchaseUpgrade}
+              onSelectSpecialist={handleSelectSpecialist}
+              activeSpecialists={{
+                shield:
+                  squadsState.shield.specialization ??
+                  metaState.selectedSpecialists?.shield ??
+                  null,
+                archer:
+                  squadsState.archer.specialization ??
+                  metaState.selectedSpecialists?.archer ??
+                  null,
+                cavalry:
+                  squadsState.cavalry.specialization ??
+                  metaState.selectedSpecialists?.cavalry ??
+                  null,
+              }}
+              onClose={() => setShowArmory(false)}
+            />
           )}
         </div>
       </div>

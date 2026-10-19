@@ -6,6 +6,15 @@
 class SoundEngine {
   private ctx: AudioContext | null = null;
   public isMuted: boolean = false;
+  private lastPlayed: Record<string, number> = {};
+
+  private canPlay(key: string, minIntervalMs: number): boolean {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const prev = this.lastPlayed[key] ?? 0;
+    if (now - prev < minIntervalMs) return false;
+    this.lastPlayed[key] = now;
+    return true;
+  }
 
   private initCtx() {
     if (!this.ctx && typeof window !== 'undefined') {
@@ -20,49 +29,51 @@ class SoundEngine {
   }
 
   public playBowShot() {
-    if (this.isMuted) return;
+    if (this.isMuted || !this.canPlay('bow', 45)) return;
     this.initCtx();
     if (!this.ctx) return;
 
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
+    const pitchJitter = 0.92 + Math.random() * 0.16;
 
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(650, t);
-    osc.frequency.exponentialRampToValueAtTime(140, t + 0.12);
+    osc.frequency.setValueAtTime(650 * pitchJitter, t);
+    osc.frequency.exponentialRampToValueAtTime(140 * pitchJitter, t + 0.11);
 
-    gain.gain.setValueAtTime(0.2, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    gain.gain.setValueAtTime(0.14, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
 
     osc.start(t);
-    osc.stop(t + 0.13);
+    osc.stop(t + 0.12);
   }
 
   public playShieldBlock() {
-    if (this.isMuted) return;
+    if (this.isMuted || !this.canPlay('block', 55)) return;
     this.initCtx();
     if (!this.ctx) return;
 
     const t = this.ctx.currentTime;
+    const pitchJitter = 0.95 + Math.random() * 0.1;
     // High metallic ping
     const osc1 = this.ctx.createOscillator();
     const osc2 = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
     osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(1850, t);
-    osc1.frequency.exponentialRampToValueAtTime(900, t + 0.18);
+    osc1.frequency.setValueAtTime(1850 * pitchJitter, t);
+    osc1.frequency.exponentialRampToValueAtTime(900 * pitchJitter, t + 0.16);
 
     osc2.type = 'triangle';
-    osc2.frequency.setValueAtTime(2720, t);
-    osc2.frequency.exponentialRampToValueAtTime(1300, t + 0.15);
+    osc2.frequency.setValueAtTime(2720 * pitchJitter, t);
+    osc2.frequency.exponentialRampToValueAtTime(1300 * pitchJitter, t + 0.14);
 
-    gain.gain.setValueAtTime(0.28, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    gain.gain.setValueAtTime(0.22, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
 
     osc1.connect(gain);
     osc2.connect(gain);
@@ -70,12 +81,12 @@ class SoundEngine {
 
     osc1.start(t);
     osc2.start(t);
-    osc1.stop(t + 0.2);
-    osc2.stop(t + 0.2);
+    osc1.stop(t + 0.18);
+    osc2.stop(t + 0.18);
   }
 
   public playSwordClash() {
-    if (this.isMuted) return;
+    if (this.isMuted || !this.canPlay('clash', 40)) return;
     this.initCtx();
     if (!this.ctx) return;
 
@@ -84,21 +95,21 @@ class SoundEngine {
     const gain = this.ctx.createGain();
 
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(800 + Math.random() * 200, t);
-    osc.frequency.exponentialRampToValueAtTime(250, t + 0.1);
+    osc.frequency.setValueAtTime(760 + Math.random() * 280, t);
+    osc.frequency.exponentialRampToValueAtTime(240, t + 0.09);
 
-    gain.gain.setValueAtTime(0.18, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    gain.gain.setValueAtTime(0.13, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
 
     osc.start(t);
-    osc.stop(t + 0.11);
+    osc.stop(t + 0.1);
   }
 
   public playShockCharge() {
-    if (this.isMuted) return;
+    if (this.isMuted || !this.canPlay('charge', 90)) return;
     this.initCtx();
     if (!this.ctx) return;
 
@@ -262,6 +273,94 @@ class SoundEngine {
 
     osc.start(t);
     osc.stop(t + 0.05);
+  }
+
+  public playFireArrow() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+    // Fiery crackling hiss: noise-like triangle sweep + pitch burst
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(450, t);
+    osc.frequency.linearRampToValueAtTime(180, t + 0.16);
+
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.17);
+  }
+
+  public playBarricadePlace() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+    // Heavy wooden post thump into earth
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.exponentialRampToValueAtTime(45, t + 0.15);
+
+    gain.gain.setValueAtTime(0.35, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.16);
+  }
+
+  public playWoodCrunch() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+    // Splintering timber snap
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(260, t);
+    osc.frequency.linearRampToValueAtTime(80, t + 0.18);
+
+    gain.gain.setValueAtTime(0.28, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.19);
+  }
+
+  public playSlowMo() {
+    if (this.isMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+    // Deep spatial tactical transition swell
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(220, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.35);
+
+    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.36);
   }
 }
 
